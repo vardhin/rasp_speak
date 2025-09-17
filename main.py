@@ -205,8 +205,8 @@ if __name__ == "__main__":
     addr = connect_bluetooth_device(BLUETOOTH_NAME)
     if addr:
         # Example: Play an MP3 file to the Bluetooth speaker
-        print("now playing mp3 to bluetooth speaker")
-        play_mp3("test.mp3")
+        #print("now playing mp3 to bluetooth speaker")
+        #play_mp3("test.mp3")
         # Example: Record from Bluetooth mic
         print("now recording from bluetooth mic")
         record_from_bluetooth_mic(duration=5, output_file="bluetooth_mic.wav")
