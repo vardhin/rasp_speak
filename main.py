@@ -134,6 +134,59 @@ def play_mp3(mp3_path):
     except Exception as e:
         print(f"Audio playback error (ignoring): {e}")
 
+def play_wav(wav_path):
+    """Play a WAV file to the Bluetooth speaker using pygame"""
+    try:
+        # Check if file exists
+        if not os.path.exists(wav_path):
+            print(f"Error: WAV file '{wav_path}' not found!")
+            return
+        
+        # Temporarily redirect stderr to suppress any warnings
+        original_stderr = os.dup(2)
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, 2)
+        
+        try:
+            pygame.mixer.init()
+            pygame.mixer.music.load(wav_path)
+            pygame.mixer.music.play()
+            
+            print(f"Playing WAV file: {wav_path}")
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.1)
+                
+        finally:
+            # Restore stderr
+            os.dup2(original_stderr, 2)
+            os.close(devnull)
+            os.close(original_stderr)
+        
+        print("WAV playback completed successfully")
+        
+    except pygame.error as e:
+        print(f"Pygame audio error: {e}")
+    except Exception as e:
+        print(f"WAV playback error: {e}")
+
+def play_wav_alternative(wav_path):
+    """Alternative method using aplay command"""
+    try:
+        if not os.path.exists(wav_path):
+            print(f"Error: WAV file '{wav_path}' not found!")
+            return
+        
+        print(f"Playing WAV file: {wav_path}")
+        result = subprocess.run(["aplay", wav_path], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print("WAV playback completed successfully")
+        else:
+            print(f"aplay error: {result.stderr}")
+            
+    except Exception as e:
+        print(f"WAV playback error: {e}")
+
 def record_from_bluetooth_mic(duration=5, output_file="output.wav"):
     try:
         import sounddevice as sd
@@ -200,6 +253,14 @@ if __name__ == "__main__":
         # Example: Play an MP3 file to the Bluetooth speaker
         #print("now playing mp3 to bluetooth speaker")
         #play_mp3("test.mp3")
+        
         # Example: Record from Bluetooth mic
         print("now recording from bluetooth mic")
         record_from_bluetooth_mic(duration=5, output_file="bluetooth_mic.wav")
+        
+        # Example: Play the recorded WAV file back
+        print("now playing recorded WAV file to bluetooth speaker")
+        play_wav("bluetooth_mic.wav")
+        
+        # Alternative method if pygame doesn't work
+        # play_wav_alternative("bluetooth_mic.wav")
