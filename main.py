@@ -243,7 +243,9 @@ def record_from_bluetooth_mic_pulseaudio(duration=5, output_file="output.wav"):
             print("Could not list PulseAudio sources")
             return
         
-        source_index = int(input("Enter source index: "))
+        # Automatically select index 1 (Bluetooth microphone)
+        source_index = 1
+        print(f"Auto-selecting source index: {source_index}")
         
         if source_index < 0 or source_index >= len(lines):
             print("Invalid source index!")
