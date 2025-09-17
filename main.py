@@ -107,42 +107,84 @@ def connect_bluetooth_device(device_name):
         return None
 
 def play_mp3(mp3_path):
-    pygame.mixer.init()
-    pygame.mixer.music.load(mp3_path)
-    pygame.mixer.music.play()
-    while pygame.mixer.music.get_busy():
-        time.sleep(1)
+    try:
+        pygame.mixer.init()
+        pygame.mixer.music.load(mp3_path)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            time.sleep(1)
+        print("Audio playback completed successfully")
+    except pygame.error as e:
+        print(f"Pygame audio error (ignoring): {e}")
+    except Exception as e:
+        print(f"Audio playback error (ignoring): {e}")
 
 def record_from_bluetooth_mic(duration=5, output_file="output.wav"):
     import pyaudio
     import wave
-    CHUNK = 1024
-    FORMAT = pyaudio.paInt16
-    CHANNELS = 1
-    RATE = 44100
-    p = pyaudio.PyAudio()
-    # List devices and select the Bluetooth mic index
-    print("Available audio devices:")
-    for i in range(p.get_device_count()):
-        info = p.get_device_info_by_index(i)
-        print(f"{i}: {info['name']}")
-    device_index = int(input("Enter the device index for HAMMER mic: "))
-    stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, input_device_index=device_index, frames_per_buffer=CHUNK)
-    print("Recording...")
-    frames = []
-    for _ in range(0, int(RATE / CHUNK * duration)):
-        data = stream.read(CHUNK)
-        frames.append(data)
-    print("Done recording.")
-    stream.stop_stream()
-    stream.close()
-    p.terminate()
-    wf = wave.open(output_file, 'wb')
-    wf.setnchannels(CHANNELS)
-    wf.setsampwidth(p.get_sample_size(FORMAT))
-    wf.setframerate(RATE)
-    wf.writeframes(b''.join(frames))
-    wf.close()
+    
+    try:
+        CHUNK = 1024
+        FORMAT = pyaudio.paInt16
+        CHANNELS = 1
+        RATE = 44100
+        p = pyaudio.PyAudio()
+        
+        # List devices and select the Bluetooth mic index
+        print("Available audio devices:")
+        for i in range(p.get_device_count()):
+            info = p.get_device_info_by_index(i)
+            print(f"{i}: {info['name']} - {info['maxInputChannels']} input channels")
+        
+        device_index = int(input("Enter the device index for HAMMER mic: "))
+        
+        # Validate device index
+        if device_index < 0 or device_index >= p.get_device_count():
+            print("Invalid device index!")
+            p.terminate()
+            return
+        
+        device_info = p.get_device_info_by_index(device_index)
+        print(f"Selected device: {device_info['name']}")
+        print(f"Max input channels: {device_info['maxInputChannels']}")
+        print(f"Default sample rate: {device_info['defaultSampleRate']}")
+        
+        stream = p.open(format=FORMAT, 
+                       channels=CHANNELS, 
+                       rate=RATE, 
+                       input=True, 
+                       input_device_index=device_index, 
+                       frames_per_buffer=CHUNK)
+        
+        print(f"Recording for {duration} seconds...")
+        frames = []
+        
+        for i in range(0, int(RATE / CHUNK * duration)):
+            data = stream.read(CHUNK)
+            frames.append(data)
+            # Show progress
+            if i % (RATE // CHUNK) == 0:  # Every second
+                print(f"Recording... {i // (RATE // CHUNK) + 1}s")
+        
+        print("Done recording.")
+        stream.stop_stream()
+        stream.close()
+        p.terminate()
+        
+        # Save to WAV file
+        wf = wave.open(output_file, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+        
+        print(f"Recording saved to: {output_file}")
+        
+    except Exception as e:
+        print(f"Recording error: {e}")
+        if 'p' in locals():
+            p.terminate()
 
 if __name__ == "__main__":
     addr = connect_bluetooth_device(BLUETOOTH_NAME)
