@@ -3,7 +3,7 @@ import time
 import subprocess
 import pygame
 
-BLUETOOTH_NAME = "HAMMER"
+BLUETOOTH_NAME = "HBTS001"
 
 def connect_bluetooth_device(device_name):
     # Scan for devices
