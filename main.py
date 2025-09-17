@@ -254,27 +254,35 @@ def record_from_bluetooth_mic_pulseaudio(duration=5, output_file="output.wav"):
         
         print(f"Recording for {duration} seconds...")
         
-        # Record using parecord (PulseAudio)
+        # For Bluetooth headset, use 16kHz sample rate (not 44.1kHz)
+        # and use the correct parecord syntax
         cmd = [
             "parecord",
-            "--device", source_name,
-            "--file-format", "wav",
-            "--rate", "44100",
-            "--channels", "1",
+            "--device=" + source_name,  # Use = instead of separate argument
+            "--file-format=wav",
+            "--rate=16000",  # Use the native 16kHz rate for Bluetooth
+            "--channels=1",
             output_file
         ]
         
+        print(f"Running command: {' '.join(cmd)}")
+        
         # Start recording process
-        process = subprocess.Popen(cmd)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         
         # Wait for specified duration
         time.sleep(duration)
         
         # Stop recording
         process.terminate()
-        process.wait()
+        stdout, stderr = process.communicate()
         
-        print(f"Recording saved to: {output_file}")
+        if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
+            print(f"Recording saved to: {output_file}")
+        else:
+            print(f"Recording failed!")
+            if stderr:
+                print(f"Error: {stderr.decode()}")
         
     except Exception as e:
         print(f"Recording error: {e}")
