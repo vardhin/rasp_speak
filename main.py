@@ -9,67 +9,102 @@ def connect_bluetooth_device(device_name):
     print("Starting Bluetooth controller...")
     # Make sure bluetoothctl is properly initialized
     subprocess.run(["sudo", "systemctl", "start", "bluetooth"], check=False)
-    time.sleep(2)
+    time.sleep(1)
     
     # Power on the Bluetooth adapter
     print("Powering on Bluetooth...")
     result = subprocess.run(["bluetoothctl", "power", "on"], capture_output=True, text=True)
     print(f"Power on result: {result.stdout.strip()}")
     
-    # Make discoverable
-    subprocess.run(["bluetoothctl", "discoverable", "on"], capture_output=True, text=True)
-    
-    # Start scanning
-    print("Starting Bluetooth scan...")
-    subprocess.run(["bluetoothctl", "scan", "on"], capture_output=True, text=True)
-    print("Scanning for 10 seconds...")
-    time.sleep(10)  # Increased scan time
-    subprocess.run(["bluetoothctl", "scan", "off"], capture_output=True, text=True)
-    
-    # Get devices
-    print("Getting device list...")
+    # Check if device is already known
+    print("Checking for known devices...")
     result = subprocess.run(["bluetoothctl", "devices"], capture_output=True, text=True)
-    
-    if result.returncode != 0:
-        print(f"Error running bluetoothctl: {result.stderr}")
-        return None
-    
-    lines = result.stdout.strip().splitlines()
-    print(f"Found {len(lines)} Bluetooth devices:")
-    
-    if not lines:
-        print("No devices found. Make sure your device is in pairing mode.")
-        return None
-    
-    for line in lines:
-        print(f"  {line}")
-    
-    # Find target device
     device_addr = None
-    for line in lines:
-        if device_name in line:
-            parts = line.split()
-            if len(parts) >= 2:
-                device_addr = parts[1]
-            break
+    
+    if result.returncode == 0:
+        lines = result.stdout.strip().splitlines()
+        for line in lines:
+            if device_name in line:
+                parts = line.split()
+                if len(parts) >= 2:
+                    device_addr = parts[1]
+                    print(f"Found known device {device_name} with address: {device_addr}")
+                break
+    
+    # If device not known, scan for it
+    if not device_addr:
+        print("Device not known, starting scan...")
+        # Start scanning in background
+        scan_process = subprocess.Popen(["bluetoothctl", "scan", "on"], 
+                                      stdout=subprocess.PIPE, 
+                                      stderr=subprocess.PIPE)
+        
+        # Check for devices every 2 seconds for up to 20 seconds
+        max_attempts = 10
+        for attempt in range(max_attempts):
+            print(f"Scan attempt {attempt + 1}/{max_attempts}...")
+            time.sleep(2)
+            
+            result = subprocess.run(["bluetoothctl", "devices"], capture_output=True, text=True)
+            if result.returncode == 0:
+                lines = result.stdout.strip().splitlines()
+                for line in lines:
+                    if device_name in line:
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            device_addr = parts[1]
+                            print(f"Found device {device_name} with address: {device_addr}")
+                            break
+                
+                if device_addr:
+                    break
+        
+        # Stop scanning
+        subprocess.run(["bluetoothctl", "scan", "off"], capture_output=True, text=True)
+        scan_process.terminate()
     
     if not device_addr:
-        print(f"Device '{device_name}' not found in the list above.")
+        print(f"Device '{device_name}' not found after scanning.")
+        # List all found devices for debugging
+        result = subprocess.run(["bluetoothctl", "devices"], capture_output=True, text=True)
+        if result.returncode == 0:
+            lines = result.stdout.strip().splitlines()
+            print(f"Available devices ({len(lines)}):")
+            for line in lines:
+                print(f"  {line}")
         return None
     
-    print(f"Found device {device_name} with address: {device_addr}")
+    print(f"Attempting to connect to {device_name} ({device_addr})")
     
-    # Pair and connect
-    print("Pairing...")
-    pair_result = subprocess.run(["bluetoothctl", "pair", device_addr], capture_output=True, text=True)
-    print(f"Pair result: {pair_result.stdout.strip()}")
+    # Try to connect (might already be paired)
+    print("Attempting connection...")
+    connect_result = subprocess.run(["bluetoothctl", "connect", device_addr], 
+                                  capture_output=True, text=True, timeout=10)
     
-    print("Connecting...")
-    connect_result = subprocess.run(["bluetoothctl", "connect", device_addr], capture_output=True, text=True)
-    print(f"Connect result: {connect_result.stdout.strip()}")
+    # If connection fails, try pairing first
+    if "Failed" in connect_result.stdout or connect_result.returncode != 0:
+        print("Connection failed, trying to pair first...")
+        pair_result = subprocess.run(["bluetoothctl", "pair", device_addr], 
+                                   capture_output=True, text=True, timeout=15)
+        print(f"Pair result: {pair_result.stdout.strip()}")
+        
+        if pair_result.returncode == 0 or "already paired" in pair_result.stdout.lower():
+            print("Trying to connect again...")
+            connect_result = subprocess.run(["bluetoothctl", "connect", device_addr], 
+                                          capture_output=True, text=True, timeout=10)
     
-    print(f"Attempted connection to {device_name} ({device_addr})")
-    return device_addr
+    print(f"Final connect result: {connect_result.stdout.strip()}")
+    
+    # Verify connection
+    time.sleep(2)
+    info_result = subprocess.run(["bluetoothctl", "info", device_addr], 
+                               capture_output=True, text=True)
+    if "Connected: yes" in info_result.stdout:
+        print(f"Successfully connected to {device_name}")
+        return device_addr
+    else:
+        print(f"Connection verification failed for {device_name}")
+        return None
 
 def play_mp3(mp3_path):
     pygame.mixer.init()
