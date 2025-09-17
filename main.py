@@ -12,6 +12,9 @@ def connect_bluetooth_device(device_name):
     time.sleep(5)
     result = subprocess.run(["bluetoothctl", "devices"], capture_output=True, text=True)
     lines = result.stdout.splitlines()
+    print("Bluetooth devices found:")
+    for line in lines:
+        print(line)
     device_addr = None
     for line in lines:
         if device_name in line:
