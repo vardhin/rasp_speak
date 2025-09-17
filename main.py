@@ -189,59 +189,91 @@ def play_wav_alternative(wav_path):
 
 def record_from_bluetooth_mic(duration=5, output_file="output.wav"):
     try:
-        import sounddevice as sd
-        import soundfile as sf
-        import numpy as np
-    except ImportError:
-        print("sounddevice not installed. Installing...")
-        subprocess.run([sys.executable, "-m", "pip", "install", "sounddevice", "soundfile"])
-        import sounddevice as sd
-        import soundfile as sf
-        import numpy as np
-    
-    try:
-        # List devices
-        print("Available audio devices:")
-        devices = sd.query_devices()
-        for i, device in enumerate(devices):
-            if device['max_input_channels'] > 0:
-                print(f"{i}: {device['name']} - {device['max_input_channels']} input channels")
-        
-        device_index = int(input("Enter the device index for Bluetooth mic: "))
-        
-        # Validate device index
-        if device_index < 0 or device_index >= len(devices):
-            print("Invalid device index!")
+        # List available ALSA devices
+        print("Available ALSA audio devices:")
+        result = subprocess.run(["arecord", "-l"], capture_output=True, text=True)
+        if result.returncode == 0:
+            print(result.stdout)
+        else:
+            print("Could not list audio devices")
             return
         
-        device_info = devices[device_index]
-        print(f"Selected device: {device_info['name']}")
-        print(f"Max input channels: {device_info['max_input_channels']}")
-        print(f"Default sample rate: {device_info['default_samplerate']}")
+        # Get user input for device selection
+        card = input("Enter card number (e.g., 1): ")
+        device = input("Enter device number (e.g., 0): ")
         
-        # Recording parameters
-        sample_rate = int(device_info['default_samplerate'])
-        channels = 1
+        # Construct device name
+        device_name = f"hw:{card},{device}"
+        
+        print(f"Recording from device: {device_name}")
+        print(f"Recording for {duration} seconds...")
+        
+        # Record using arecord
+        cmd = [
+            "arecord",
+            "-D", device_name,
+            "-f", "S16_LE",  # 16-bit little endian
+            "-r", "44100",   # Sample rate
+            "-c", "1",       # Mono
+            "-d", str(duration),  # Duration
+            output_file
+        ]
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print(f"Recording saved to: {output_file}")
+        else:
+            print(f"Recording failed: {result.stderr}")
+            
+    except Exception as e:
+        print(f"Recording error: {e}")
+
+def record_from_bluetooth_mic_pulseaudio(duration=5, output_file="output.wav"):
+    """Alternative method using PulseAudio"""
+    try:
+        # List PulseAudio sources
+        print("Available PulseAudio sources:")
+        result = subprocess.run(["pactl", "list", "short", "sources"], capture_output=True, text=True)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for i, line in enumerate(lines):
+                print(f"{i}: {line}")
+        else:
+            print("Could not list PulseAudio sources")
+            return
+        
+        source_index = int(input("Enter source index: "))
+        
+        if source_index < 0 or source_index >= len(lines):
+            print("Invalid source index!")
+            return
+        
+        source_name = lines[source_index].split()[1]
+        print(f"Selected source: {source_name}")
         
         print(f"Recording for {duration} seconds...")
         
-        # Record audio
-        recording = sd.rec(int(duration * sample_rate), 
-                          samplerate=sample_rate, 
-                          channels=channels, 
-                          device=device_index,
-                          dtype='float32')
+        # Record using parecord (PulseAudio)
+        cmd = [
+            "parecord",
+            "--device", source_name,
+            "--file-format", "wav",
+            "--rate", "44100",
+            "--channels", "1",
+            output_file
+        ]
         
-        # Show progress
-        for i in range(duration):
-            time.sleep(1)
-            print(f"Recording... {i + 1}s")
+        # Start recording process
+        process = subprocess.Popen(cmd)
         
-        sd.wait()  # Wait until recording is finished
-        print("Done recording.")
+        # Wait for specified duration
+        time.sleep(duration)
         
-        # Save to WAV file
-        sf.write(output_file, recording, sample_rate)
+        # Stop recording
+        process.terminate()
+        process.wait()
+        
         print(f"Recording saved to: {output_file}")
         
     except Exception as e:
@@ -250,17 +282,15 @@ def record_from_bluetooth_mic(duration=5, output_file="output.wav"):
 if __name__ == "__main__":
     addr = connect_bluetooth_device(BLUETOOTH_NAME)
     if addr:
-        # Example: Play an MP3 file to the Bluetooth speaker
-        #print("now playing mp3 to bluetooth speaker")
-        #play_mp3("test.mp3")
-        
         # Example: Record from Bluetooth mic
         print("now recording from bluetooth mic")
+        
+        # Try ALSA method first
         record_from_bluetooth_mic(duration=5, output_file="bluetooth_mic.wav")
+        
+        # If that doesn't work, try PulseAudio method
+        # record_from_bluetooth_mic_pulseaudio(duration=5, output_file="bluetooth_mic.wav")
         
         # Example: Play the recorded WAV file back
         print("now playing recorded WAV file to bluetooth speaker")
         play_wav("bluetooth_mic.wav")
-        
-        # Alternative method if pygame doesn't work
-        # play_wav_alternative("bluetooth_mic.wav")
