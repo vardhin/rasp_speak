@@ -2,6 +2,9 @@ import os
 import time
 import subprocess
 import pygame
+import sys
+from contextlib import redirect_stderr
+from io import StringIO
 
 BLUETOOTH_NAME = "HBTS001"
 
@@ -110,9 +113,13 @@ def play_mp3(mp3_path):
     try:
         pygame.mixer.init()
         pygame.mixer.music.load(mp3_path)
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
-            time.sleep(1)
+        
+        # Suppress stderr during playback to hide libmpg123 warnings
+        with redirect_stderr(StringIO()):
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy():
+                time.sleep(1)
+        
         print("Audio playback completed successfully")
     except pygame.error as e:
         print(f"Pygame audio error (ignoring): {e}")
