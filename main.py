@@ -111,14 +111,22 @@ def connect_bluetooth_device(device_name):
 
 def play_mp3(mp3_path):
     try:
-        pygame.mixer.init()
-        pygame.mixer.music.load(mp3_path)
+        # Temporarily redirect stderr to suppress libmpg123 warnings
+        original_stderr = os.dup(2)
+        devnull = os.open(os.devnull, os.O_WRONLY)
+        os.dup2(devnull, 2)
         
-        # Suppress stderr during playback to hide libmpg123 warnings
-        with redirect_stderr(StringIO()):
+        try:
+            pygame.mixer.init()
+            pygame.mixer.music.load(mp3_path)
             pygame.mixer.music.play()
             while pygame.mixer.music.get_busy():
                 time.sleep(1)
+        finally:
+            # Restore stderr
+            os.dup2(original_stderr, 2)
+            os.close(devnull)
+            os.close(original_stderr)
         
         print("Audio playback completed successfully")
     except pygame.error as e:
