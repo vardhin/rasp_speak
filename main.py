@@ -314,10 +314,10 @@ def enable_bluetooth_handsfree_profile(device_addr):
             print("Available sources after profile switch:")
             print(result.stdout)
             
-            # Look for Bluetooth source
+            # Look for Bluetooth input source (PipeWire uses bluez_input, not bluez_source)
             lines = result.stdout.strip().split('\n')
             for line in lines:
-                if "bluez_source" in line and device_addr.replace(':', '_') in line:
+                if ("bluez_source" in line or "bluez_input" in line) and device_addr.replace(':', '_') in line:
                     print(f"✓ Bluetooth microphone source found: {line}")
                     return True
         
