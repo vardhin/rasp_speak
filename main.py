@@ -135,71 +135,64 @@ def play_mp3(mp3_path):
         print(f"Audio playback error (ignoring): {e}")
 
 def record_from_bluetooth_mic(duration=5, output_file="output.wav"):
-    import pyaudio
-    import wave
+    try:
+        import sounddevice as sd
+        import soundfile as sf
+        import numpy as np
+    except ImportError:
+        print("sounddevice not installed. Installing...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "sounddevice", "soundfile"])
+        import sounddevice as sd
+        import soundfile as sf
+        import numpy as np
     
     try:
-        CHUNK = 1024
-        FORMAT = pyaudio.paInt16
-        CHANNELS = 1
-        RATE = 44100
-        p = pyaudio.PyAudio()
-        
-        # List devices and select the Bluetooth mic index
+        # List devices
         print("Available audio devices:")
-        for i in range(p.get_device_count()):
-            info = p.get_device_info_by_index(i)
-            print(f"{i}: {info['name']} - {info['maxInputChannels']} input channels")
+        devices = sd.query_devices()
+        for i, device in enumerate(devices):
+            if device['max_input_channels'] > 0:
+                print(f"{i}: {device['name']} - {device['max_input_channels']} input channels")
         
-        device_index = int(input("Enter the device index for HAMMER mic: "))
+        device_index = int(input("Enter the device index for Bluetooth mic: "))
         
         # Validate device index
-        if device_index < 0 or device_index >= p.get_device_count():
+        if device_index < 0 or device_index >= len(devices):
             print("Invalid device index!")
-            p.terminate()
             return
         
-        device_info = p.get_device_info_by_index(device_index)
+        device_info = devices[device_index]
         print(f"Selected device: {device_info['name']}")
-        print(f"Max input channels: {device_info['maxInputChannels']}")
-        print(f"Default sample rate: {device_info['defaultSampleRate']}")
+        print(f"Max input channels: {device_info['max_input_channels']}")
+        print(f"Default sample rate: {device_info['default_samplerate']}")
         
-        stream = p.open(format=FORMAT, 
-                       channels=CHANNELS, 
-                       rate=RATE, 
-                       input=True, 
-                       input_device_index=device_index, 
-                       frames_per_buffer=CHUNK)
+        # Recording parameters
+        sample_rate = int(device_info['default_samplerate'])
+        channels = 1
         
         print(f"Recording for {duration} seconds...")
-        frames = []
         
-        for i in range(0, int(RATE / CHUNK * duration)):
-            data = stream.read(CHUNK)
-            frames.append(data)
-            # Show progress
-            if i % (RATE // CHUNK) == 0:  # Every second
-                print(f"Recording... {i // (RATE // CHUNK) + 1}s")
+        # Record audio
+        recording = sd.rec(int(duration * sample_rate), 
+                          samplerate=sample_rate, 
+                          channels=channels, 
+                          device=device_index,
+                          dtype='float32')
         
+        # Show progress
+        for i in range(duration):
+            time.sleep(1)
+            print(f"Recording... {i + 1}s")
+        
+        sd.wait()  # Wait until recording is finished
         print("Done recording.")
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
         
         # Save to WAV file
-        wf = wave.open(output_file, 'wb')
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(p.get_sample_size(FORMAT))
-        wf.setframerate(RATE)
-        wf.writeframes(b''.join(frames))
-        wf.close()
-        
+        sf.write(output_file, recording, sample_rate)
         print(f"Recording saved to: {output_file}")
         
     except Exception as e:
         print(f"Recording error: {e}")
-        if 'p' in locals():
-            p.terminate()
 
 if __name__ == "__main__":
     addr = connect_bluetooth_device(BLUETOOTH_NAME)
