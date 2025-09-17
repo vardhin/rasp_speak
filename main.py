@@ -279,18 +279,68 @@ def record_from_bluetooth_mic_pulseaudio(duration=5, output_file="output.wav"):
     except Exception as e:
         print(f"Recording error: {e}")
 
+def enable_bluetooth_handsfree_profile(device_addr):
+    """Switch Bluetooth device to handsfree profile to enable microphone"""
+    try:
+        print("Switching to handsfree profile to enable microphone...")
+        
+        # Construct card name
+        card_name = f"bluez_card.{device_addr.replace(':', '_')}"
+        
+        # Try the better quality mSBC codec first
+        cmd = ["pactl", "set-card-profile", card_name, "headset-head-unit"]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            print("Successfully enabled headset-head-unit profile (mSBC codec)")
+        else:
+            # Fall back to CVSD codec
+            print("Trying CVSD codec...")
+            cmd = ["pactl", "set-card-profile", card_name, "headset-head-unit-cvsd"]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            
+            if result.returncode == 0:
+                print("Successfully enabled headset-head-unit-cvsd profile (CVSD codec)")
+            else:
+                print(f"Failed to set handsfree profile: {result.stderr}")
+                return False
+        
+        # Wait for profile to activate
+        time.sleep(3)
+        
+        # Check if microphone source is now available
+        result = subprocess.run(["pactl", "list", "short", "sources"], capture_output=True, text=True)
+        if result.returncode == 0:
+            print("Available sources after profile switch:")
+            print(result.stdout)
+            
+            # Look for Bluetooth source
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                if "bluez_source" in line and device_addr.replace(':', '_') in line:
+                    print(f"✓ Bluetooth microphone source found: {line}")
+                    return True
+        
+        print("No Bluetooth microphone source found after profile switch")
+        return False
+        
+    except Exception as e:
+        print(f"Error enabling handsfree profile: {e}")
+        return False
+
 if __name__ == "__main__":
     addr = connect_bluetooth_device(BLUETOOTH_NAME)
     if addr:
-        # Example: Record from Bluetooth mic
-        print("now recording from bluetooth mic")
-        
-        # Try ALSA method first
-        record_from_bluetooth_mic(duration=5, output_file="bluetooth_mic.wav")
-        
-        # If that doesn't work, try PulseAudio method
-        # record_from_bluetooth_mic_pulseaudio(duration=5, output_file="bluetooth_mic.wav")
-        
-        # Example: Play the recorded WAV file back
-        print("now playing recorded WAV file to bluetooth speaker")
-        play_wav("bluetooth_mic.wav")
+        # Enable handsfree profile for microphone access
+        if enable_bluetooth_handsfree_profile(addr):
+            print("Bluetooth microphone is now available!")
+            
+            # Record from Bluetooth mic using PulseAudio
+            print("now recording from bluetooth mic")
+            record_from_bluetooth_mic_pulseaudio(duration=5, output_file="bluetooth_mic.wav")
+            
+            # Play the recorded WAV file back
+            print("now playing recorded WAV file to bluetooth speaker")
+            play_wav("bluetooth_mic.wav")
+        else:
+            print("Failed to enable Bluetooth microphone")
