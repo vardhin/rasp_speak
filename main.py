@@ -6,10 +6,11 @@ import pygame
 BLUETOOTH_NAME = "HBTS001"
 
 def connect_bluetooth_device(device_name):
-    # Scan for devices
+    # Start scanning in the background
     print("Scanning for Bluetooth devices...")
-    result = subprocess.run(["bluetoothctl", "scan", "on"], capture_output=True, text=True, timeout=10)
-    time.sleep(5)
+    subprocess.run(["bluetoothctl", "scan", "on"], capture_output=True, text=True)
+    time.sleep(5)  # Wait for devices to be discovered
+    subprocess.run(["bluetoothctl", "scan", "off"], capture_output=True, text=True)
     result = subprocess.run(["bluetoothctl", "devices"], capture_output=True, text=True)
     lines = result.stdout.splitlines()
     print("Bluetooth devices found:")
